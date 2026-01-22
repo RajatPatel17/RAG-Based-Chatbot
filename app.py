@@ -36,6 +36,11 @@ embedding_model  = HuggingFaceBgeEmbeddings(model_name='all-MiniLM-L6-v2')
 st.sidebar.title(':green[UPLOAD YOUR FILE]')
 st.sidebar.subheader(':red[Upload PDF File Only]')
 pdf_file = st.sidebar.file_uploader('Upload here',type=['pdf'])
+
+
+if 'history' not in st.session_state:
+    st.session_state.history = []
+
 if pdf_file:
     st.sidebar.success('File Uploaded Successfully')
 
@@ -54,23 +59,31 @@ if pdf_file:
         retrived_docs = retriever.invoke(query)
         context = '\n'.join([d.page_content for d in retrived_docs])
 
-        augmented_prompt = f''' <Role> You are an helpful Assitant Using RAG
-        <Goal> Answer the Question asked by the user. Here is the question {query} 
+        chat_history_str = ""
+        for chat in st.session_state.history:
+            role = "User" if chat['role'] == 'user' else "model"
+            chat_history_str += f"{role}: {chat['text']}\n"
+
+        augmented_prompt = f''' <Role> You are an helpful Assitant(model) Using RAG
+
+        <Goal> Answer the Question asked by the user. Here is the <question> {query} <question> 
+        <Instructions>You must consider the Context provided and the Conversation History.
+        
+        <Conversation History>
+        {chat_history_str}
+        <Conversation History>
         <context>here are the douments retreived from the vector Database to support the answer which you have to generate : {context}'''
 
         response = model.generate_content(augmented_prompt)
         return response.text 
 
-    # Create Chatbot in order to start the conversation
-    #  TO Intialize a chat create history if not created
-    if 'history' not in st.session_state:
-        st.session_state.history = []
+    
     # Display the history 
     for msg in  st.session_state.history:
         if msg['role']=='user':
             st.info(f':green[User:] :blue[{msg['text']}]')
         else:
-            st.warning(f':orange[ChatBot:   :blue[{msg['text']}]]')
+            st.warning(f':orange[Chatbot:   :blue[{msg['text']}]]')
     # Input from the user using streamlit form
     with st.form('Chatbot Form',clear_on_submit= True):
         user_query = st.text_area('Ask Anyhting')
@@ -79,5 +92,5 @@ if pdf_file:
     # Start the Conversation and append output and query in history
     if user_query and send:
         st.session_state.history.append({'role':'user','text':user_query})
-        st.session_state.history.append({'role':'chatbot','text':generate_content(user_query)})
+        st.session_state.history.append({'role':'model','text':generate_content(user_query)})
         st.rerun()
